@@ -182,6 +182,9 @@ class DataProcessor(object):
     def sample_points(self, data_dict=None, config=None):
         if data_dict is None:
             return partial(self.sample_points, config=config)
+        
+        if len(data_dict["points"]) == 0:
+            return data_dict
 
         num_points = config.NUM_POINTS[self.mode]
         if num_points == -1:
@@ -205,7 +208,10 @@ class DataProcessor(object):
         else:
             choice = np.arange(0, len(points), dtype=np.int32)
             if num_points > len(points):
-                extra_choice = np.random.choice(choice, num_points - len(points), replace=False)
+                if (num_points - len(points)) > len(points):
+                    extra_choice = np.random.choice(choice, size=(num_points - len(points)))
+                else:
+                    extra_choice = np.random.choice(choice, size=(num_points - len(points)), replace=False)
                 choice = np.concatenate((choice, extra_choice), axis=0)
             np.random.shuffle(choice)
         data_dict['points'] = points[choice]

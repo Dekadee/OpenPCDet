@@ -217,7 +217,7 @@ def get_sample_data(nusc, sample_data_token, selected_anntokens=None):
     # Make list of Box objects including coord system transforms.
     box_list = []
     for box in boxes:
-        box.velocity = nusc.box_velocity(box.token)
+        # box.velocity = nusc.box_velocity(box.token)
         # Move box to ego vehicle coord system
         box.translate(-np.array(pose_record['translation']))
         box.rotate(Quaternion(pose_record['rotation']).inverse)
@@ -283,7 +283,7 @@ def obtain_sensor2top(
         "sensor2ego_rotation": cs_record["rotation"],
         "ego2global_translation": pose_record["translation"],
         "ego2global_rotation": pose_record["rotation"],
-        "timestamp": sd_rec["timestamp"],
+        "timestamp": int(sd_rec["timestamp"]),
     }
     l2e_r_s = sweep["sensor2ego_rotation"]
     l2e_t_s = sweep["sensor2ego_translation"]
@@ -324,12 +324,9 @@ def fill_trainval_infos(data_path, nusc, train_scenes, val_scenes, test=False, m
         ref_sd_rec = nusc.get('sample_data', ref_sd_token)
         ref_cs_rec = nusc.get('calibrated_sensor', ref_sd_rec['calibrated_sensor_token'])
         ref_pose_rec = nusc.get('ego_pose', ref_sd_rec['ego_pose_token'])
-        ref_time = 1e-6 * ref_sd_rec['timestamp']
+        ref_time = 1e-6 * int(ref_sd_rec['timestamp'])
 
         ref_lidar_path, ref_boxes, _ = get_sample_data(nusc, ref_sd_token)
-
-        ref_cam_front_token = sample['data']['CAM_FRONT']
-        ref_cam_path, _, ref_cam_intrinsic = nusc.get_sample_data(ref_cam_front_token)
 
         # Homogeneous transform from ego car frame to reference frame
         ref_from_car = transform_matrix(
@@ -343,8 +340,6 @@ def fill_trainval_infos(data_path, nusc, train_scenes, val_scenes, test=False, m
 
         info = {
             'lidar_path': Path(ref_lidar_path).relative_to(data_path).__str__(),
-            'cam_front_path': Path(ref_cam_path).relative_to(data_path).__str__(),
-            'cam_intrinsic': ref_cam_intrinsic,
             'token': sample['token'],
             'sweeps': [],
             'ref_from_car': ref_from_car,
@@ -352,6 +347,12 @@ def fill_trainval_infos(data_path, nusc, train_scenes, val_scenes, test=False, m
             'timestamp': ref_time,
         }
         if with_cam:
+            ref_cam_front_token = sample['data']['CAM_FRONT']
+            ref_cam_path, _, ref_cam_intrinsic = nusc.get_sample_data(ref_cam_front_token)
+            
+            info['cam_front_path'] = Path(ref_cam_path).relative_to(data_path).__str__()
+            info['cam_intrinsic'] = ref_cam_intrinsic
+
             info['cams'] = dict()
             l2e_r = ref_cs_rec["rotation"]
             l2e_t = ref_cs_rec["translation"],
@@ -390,7 +391,7 @@ def fill_trainval_infos(data_path, nusc, train_scenes, val_scenes, test=False, m
                         'lidar_path': Path(ref_lidar_path).relative_to(data_path).__str__(),
                         'sample_data_token': curr_sd_rec['token'],
                         'transform_matrix': None,
-                        'time_lag': curr_sd_rec['timestamp'] * 0,
+                        'time_lag': int(curr_sd_rec['timestamp']) * 0,
                     }
                     sweeps.append(sweep)
                 else:
@@ -416,7 +417,7 @@ def fill_trainval_infos(data_path, nusc, train_scenes, val_scenes, test=False, m
 
                 lidar_path = nusc.get_sample_data_path(curr_sd_rec['token'])
 
-                time_lag = ref_time - 1e-6 * curr_sd_rec['timestamp']
+                time_lag = ref_time - 1e-6 * int(curr_sd_rec['timestamp'])
 
                 sweep = {
                     'lidar_path': Path(lidar_path).relative_to(data_path).__str__(),
@@ -440,7 +441,7 @@ def fill_trainval_infos(data_path, nusc, train_scenes, val_scenes, test=False, m
             # the filtering gives 0.5~1 map improvement
             num_lidar_pts = np.array([anno['num_lidar_pts'] for anno in annotations])
             num_radar_pts = np.array([anno['num_radar_pts'] for anno in annotations])
-            mask = (num_lidar_pts + num_radar_pts > 0)
+            mask = (num_lidar_pts + num_radar_pts >= 0)
 
             locs = np.array([b.center for b in ref_boxes]).reshape(-1, 3)
             dims = np.array([b.wlh for b in ref_boxes]).reshape(-1, 3)[:, [1, 0, 2]]  # wlh == > dxdydz (lwh)
